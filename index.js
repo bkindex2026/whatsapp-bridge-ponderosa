@@ -1,8 +1,20 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const axios = require('axios');
 const qrcode = require('qrcode-terminal');
+const http = require('http');
 
 const RENDER_WEBHOOK_URL = 'https://agente-whatsapp-ponderosa.onrender.com/webhook/whatsapp';
+const PORT = process.env.PORT || 3000;
+
+// Servidor HTTP para cumplir el chequeo de salud de Render
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('WhatsApp Bridge Activo');
+});
+
+server.listen(PORT, () => {
+    console.log(`🌐 Servidor Web escuchando en puerto ${PORT}`);
+});
 
 async function iniciarBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -17,8 +29,9 @@ async function iniciarBot() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log('📌 ESCANEA ESTE CÓDIGO QR DESDE TU CELULAR:');
-            qrcode.generate(qr, { small: true }, (qrcodeStr) => console.log(qrcodeStr));
+            console.log('\n--- ESCANEA ESTE CÓDIGO QR ---');
+            qrcode.generate(qr, { small: true });
+            console.log('-------------------------------\n');
         }
 
         if (connection === 'close') {
@@ -39,15 +52,15 @@ async function iniciarBot() {
             const isImage = msg.message.imageMessage || msg.message.documentMessage;
             if (!isImage) continue;
 
-            console.log('📩 Imagen o comprobante detectado en WhatsApp. Enviando al Webhook de Render...');
+            console.log('📩 Imagen o comprobante detectado en WhatsApp. Enviando al Webhook...');
 
             try {
                 await axios.post(RENDER_WEBHOOK_URL, msg, {
                     headers: { 'Content-Type': 'application/json' }
                 });
-                console.log('🚀 Comprobante enviado con éxito a Render.');
+                console.log('🚀 Comprobante enviado con éxito.');
             } catch (error) {
-                console.error('❌ Error enviando la imagen al Webhook:', error.message);
+                console.error('❌ Error enviando la imagen:', error.message);
             }
         }
     });
