@@ -1,0 +1,14 @@
+{
+  "name": "whatsapp-bridge-ponderosa",
+  "version": "1.0.0",
+  "description": "Puente ligero de WhatsApp a Webhook de Render",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.6.0",
+    "axios": "^1.6.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
