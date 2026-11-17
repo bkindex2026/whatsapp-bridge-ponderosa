@@ -18,7 +18,7 @@ async function iniciarBot() {
 
         if (qr) {
             console.log('📌 ESCANEA ESTE CÓDIGO QR DESDE TU CELULAR:');
-            qrcode.generate(qr, { small: true });
+            qrcode.generate(qr, { small: true }, (qrcodeStr) => console.log(qrcodeStr));
         }
 
         if (connection === 'close') {
