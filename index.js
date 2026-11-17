@@ -1,38 +1,45 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const axios = require('axios');
-const qrcode = require('qrcode');
+const qrcode = require('qrcode-terminal');
 const http = require('http');
 
 const RENDER_WEBHOOK_URL = 'https://agente-whatsapp-ponderosa.onrender.com/webhook/whatsapp';
 const PORT = process.env.PORT || 3000;
 
-let latestQrImage = '';
-let connectionStatus = 'Esperando código QR...';
+let currentQR = '';
+let connectionStatus = 'Generando código QR...';
 
-// Servidor Web que renderiza la imagen del QR o el estado de la conexión
-const server = http.createServer(async (req, res) => {
+const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     
     if (connectionStatus === 'Conectado') {
         res.end(`
-            <div style="font-family: sans-serif; text-align: center; padding: 50px;">
-                <h1 style="color: #2e7d32;">✅ WhatsApp Conectado Exitosamente</h1>
-                <p>El bot está activo y reenviando comprobantes al Webhook.</p>
+            <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
+                <h1 style="color: green;">✅ WhatsApp Conectado Exitosamente</h1>
+                <p>El bot conector está activo y procesando comprobantes.</p>
             </div>
         `);
-    } else if (latestQrImage) {
+    } else if (currentQR) {
+        const googleChartUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}`;
         res.end(`
-            <div style="font-family: sans-serif; text-align: center; padding: 30px;">
-                <h2>Escanear Código QR de WhatsApp</h2>
+            <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 30px;">
+                <h2>Vincular WhatsApp - Ponderosa Minerals</h2>
                 <p>Abre WhatsApp ➔ Dispositivos vinculados ➔ Vincular un dispositivo</p>
-                <img src="${latestQrImage}" alt="Código QR" style="width: 300px; height: 300px; border: 1px solid #ccc; padding: 10px;"/>
+                <img src="${googleChartUrl}" alt="Código QR" style="border: 2px solid #333; padding: 10px; border-radius: 8px;" />
+                <p style="font-size: 12px; color: #666;">La página se actualiza sola al conectarse.</p>
+                <script>
+                    setTimeout(() => { location.reload(); }, 5000);
+                </script>
             </div>
         `);
     } else {
         res.end(`
-            <div style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
                 <h2>${connectionStatus}</h2>
-                <p>Actualiza la página en unos segundos...</p>
+                <p>Por favor, recarga la página en unos segundos...</p>
+                <script>
+                    setTimeout(() => { location.reload(); }, 4000);
+                </script>
             </div>
         `);
     }
@@ -51,17 +58,13 @@ async function iniciarBot() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', async (update) => {
+    sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            try {
-                latestQrImage = await qrcode.toDataURL(qr);
-                connectionStatus = 'QR Generado';
-                console.log('📌 Nuevo código QR generado. Abre la URL del servicio en el navegador.');
-            } catch (err) {
-                console.error('Error generando imagen QR:', err);
-            }
+            currentQR = qr;
+            connectionStatus = 'QR listo para escanear';
+            console.log('📌 Nuevo código QR listo en el navegador web.');
         }
 
         if (connection === 'close') {
@@ -71,7 +74,7 @@ async function iniciarBot() {
             if (shouldReconnect) iniciarBot();
         } else if (connection === 'open') {
             connectionStatus = 'Conectado';
-            latestQrImage = '';
+            currentQR = '';
             console.log('✅ Bot Conector WhatsApp activo y vinculado exitosamente.');
         }
     });
