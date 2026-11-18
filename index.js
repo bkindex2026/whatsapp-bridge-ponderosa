@@ -10,6 +10,12 @@ let currentQR = '';
 let connectionStatus = 'Generando código QR...';
 
 const server = http.createServer((req, res) => {
+    // Si la petición viene de cron-job, /docs o /health, responder solo 200 OK en texto plano liviano
+    if (req.url === '/docs' || req.url === '/health' || req.headers['user-agent']?.includes('cron-job')) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        return res.end('OK');
+    }
+
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     
     if (connectionStatus === 'Conectado') {
