@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const axios = require('axios');
 const qrcode = require('qrcode-terminal');
 const http = require('http');
@@ -26,20 +26,14 @@ const server = http.createServer((req, res) => {
                 <h2>Vincular WhatsApp - Ponderosa Minerals</h2>
                 <p>Abre WhatsApp ➔ Dispositivos vinculados ➔ Vincular un dispositivo</p>
                 <img src="${googleChartUrl}" alt="Código QR" style="border: 2px solid #333; padding: 10px; border-radius: 8px;" />
-                <p style="font-size: 12px; color: #666;">La página se actualiza sola al conectarse.</p>
-                <script>
-                    setTimeout(() => { location.reload(); }, 5000);
-                </script>
+                <script>setTimeout(() => { location.reload(); }, 5000);</script>
             </div>
         `);
     } else {
         res.end(`
             <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
                 <h2>${connectionStatus}</h2>
-                <p>Por favor, recarga la página en unos segundos...</p>
-                <script>
-                    setTimeout(() => { location.reload(); }, 4000);
-                </script>
+                <script>setTimeout(() => { location.reload(); }, 4000);</script>
             </div>
         `);
     }
@@ -51,10 +45,7 @@ server.listen(PORT, () => {
 
 async function iniciarBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-    
-    const sock = makeWASocket({
-        auth: state
-    });
+    const sock = makeWASocket({ auth: state });
 
     sock.ev.on('creds.update', saveCreds);
 
@@ -64,18 +55,16 @@ async function iniciarBot() {
         if (qr) {
             currentQR = qr;
             connectionStatus = 'QR listo para escanear';
-            console.log('📌 Nuevo código QR listo en el navegador web.');
         }
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log('Conexión cerrada. Reconectando...', shouldReconnect);
             connectionStatus = 'Reconectando...';
             if (shouldReconnect) iniciarBot();
         } else if (connection === 'open') {
             connectionStatus = 'Conectado';
             currentQR = '';
-            console.log('✅ Bot Conector WhatsApp activo y vinculado exitosamente.');
+            console.log('✅ Bot Conector WhatsApp activo.');
         }
     });
 
@@ -88,15 +77,38 @@ async function iniciarBot() {
             const isImage = msg.message.imageMessage || msg.message.documentMessage;
             if (!isImage) continue;
 
-            console.log('📩 Imagen o comprobante detectado en WhatsApp. Enviando al Webhook...');
+            console.log('📩 Imagen detectada. Descargando buffer...');
 
             try {
-                await axios.post(RENDER_WEBHOOK_URL, msg, {
+                // Descargar el archivo binario desencriptado desde WhatsApp
+                const buffer = await downloadMediaMessage(
+                    msg,
+                    'buffer',
+                    { },
+                    { reuploadRequest: sock.updateMediaMessage }
+                );
+
+                const base64Image = buffer.toString('base64');
+                const mimeType = isImage.mimetype || 'image/jpeg';
+
+                // Enviar payload estructurado con Base64 al backend Python
+                const payload = {
+                    data: {
+                        message: {
+                            imageMessage: {
+                                base64: base64Image,
+                                mimetype: mimeType
+                            }
+                        }
+                    }
+                };
+
+                await axios.post(RENDER_WEBHOOK_URL, payload, {
                     headers: { 'Content-Type': 'application/json' }
                 });
-                console.log('🚀 Comprobante enviado con éxito.');
+                console.log('🚀 Imagen en Base64 enviada con éxito al backend.');
             } catch (error) {
-                console.error('❌ Error enviando la imagen:', error.message);
+                console.error('❌ Error al procesar o enviar imagen:', error.message);
             }
         }
     });
