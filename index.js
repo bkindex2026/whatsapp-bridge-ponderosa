@@ -2,20 +2,26 @@ const { default: makeWASocket, DisconnectReason, downloadMediaMessage, initAuthC
 const axios = require('axios');
 const http = require('http');
 const { Pool } = require('pg');
+const pino = require('pino');
 
 const RENDER_WEBHOOK_URL = 'https://agente-whatsapp-ponderosa.onrender.com/webhook/whatsapp';
 const PORT = process.env.PORT || 3000;
 
+// Configuración de logger silencioso para prevenir desbordamiento de memoria
+const logger = pino({ level: 'silent' });
+
 let currentQR = '';
 let connectionStatus = 'Generando código QR...';
 
-// Conexión a Neon PostgreSQL mediante la variable de entorno de Render
+// Pool de conexión a Neon PostgreSQL con tolerancias de red explícitas
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000
 });
 
-// Adaptador de almacenamiento persistente en PostgreSQL para Baileys
+// Adaptador de persistencia en PostgreSQL
 async function usePostgresAuthState() {
     const readData = async (type, id) => {
         try {
@@ -97,7 +103,6 @@ async function usePostgresAuthState() {
 }
 
 const server = http.createServer((req, res) => {
-    // Responder 200 OK a monitores de Render / cron-job
     if (req.url === '/docs' || req.url === '/health' || req.headers['user-agent']?.includes('cron-job')) {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         return res.end('OK');
@@ -138,7 +143,13 @@ server.listen(PORT, () => {
 
 async function iniciarBot() {
     const { state, saveCreds } = await usePostgresAuthState();
-    const sock = makeWASocket({ auth: state });
+    const sock = makeWASocket({
+        auth: state,
+        logger: logger,
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: undefined,
+        keepAliveIntervalMs: 10000
+    });
 
     sock.ev.on('creds.update', saveCreds);
 
